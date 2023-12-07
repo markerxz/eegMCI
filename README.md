@@ -1,0 +1,2 @@
+# eegMCI
+BrainHackathon2023
