@@ -6,19 +6,22 @@ mne.set_log_level('CRITICAL')
 
 def all_chs():
     mne.set_log_level('CRITICAL')
-    raw = mne.io.read_epochs_eeglab('/home3/mci-eeg/data/target_lock/s1003.set')
+    raw = mne.io.read_epochs_eeglab('/home3/brainHackathon/dataset/eeg/sbj4521flanker_sess01_artifactfree.set')
     chs = [hey['ch_name'] for hey in raw.info['chs']]
     chs = {chs[i]:i for i in range(len(chs))}
     return chs
 
 def TT(tmin = -2, tmax = 4):
-    path = '/home3/mci-eeg-sep6-2023/s45/eeg'
+    path = '/home3/brainHackathon/dataset/eeg'
     epochs = mne.io.read_epochs_eeglab(f'{path}/sbj4521flanker_sess01_artifactfree.set')
     epochs = epochs.crop(tmin = tmin, tmax = tmax)
     return epochs.times
 
 def convert_isi (isi):
     return int(isi*512)/512
+
+def subjects_info():
+    return pd.read_csv('/home3/brainHackathon/dataset/MCI.csv')
 
 def subjectIDs():
     subjectID_list = {}
@@ -29,10 +32,10 @@ def subjectIDs():
 def df_subject_query (subjectID):
     params = ['cueloc','salientloc','coninc','RT','hit','isi']
     if subjectID[0] == '4':
-        dire = 's45'
+        path = '/home3/brainHackathon/dataset'
     else:
-        dire = 's123'
-    path = f'/home3/mci-eeg-sep6-2023/{dire}'
+        path = '/home3/mci-eeg-sep6-2023/s123'
+    
     d = {param:[] for param in params}
     d['index'] = list(range(576))
     for block_id in range(1,16+1):
@@ -68,7 +71,18 @@ def df_subject_query (subjectID):
 
 
 
-def subject_query (subjectID,cue_tar,csd=True,thresh=1):
+def subject_query (subjectID,cue_tar,csd=True,min_trial=1,hit='both'):
+    
+    # cue_tar -> 'cue_lock' or 'target_lock'
+    
+    # min_trial -> minimum number of trials to considered, condition with less trials than that will not be exported
+    
+    # hit = 'both' -> all 'hit' and not 'hit'
+    # hit = 'True' -> only correct hit (both correct answer and in time)
+    # hit = 'False' -> only false hit (late in time or incorrect answer)
+    
+    
+    
     mne.set_log_level('CRITICAL')
     target_tmin, target_tmax = -2,4
     cue_tmin, cue_tmax = -2,4
@@ -78,11 +92,10 @@ def subject_query (subjectID,cue_tar,csd=True,thresh=1):
         baseline_window = (-0.2,0)
         
     if subjectID[0] == '4':
-        dire = 's45'
+        path = '/home3/brainHackathon/dataset/eeg'
     else:
-        dire = 's123'
+        path = '/home3/mci-eeg-sep6-2023/s123/eeg'
         
-    path = f'/home3/mci-eeg-sep6-2023/{dire}/eeg'
     epochs = mne.io.read_epochs_eeglab(f'{path}/sbj{subjectID}flanker_sess01_artifactfree.set')
     epochs = epochs.pick_types(eeg=True)
     df = df_subject_query(subjectID)
@@ -109,11 +122,18 @@ def subject_query (subjectID,cue_tar,csd=True,thresh=1):
     epochs_np = epochs._data
     conds = ['LNS1','LNS2','RNS1','RNS2','LSA1','LSA2','RSA1','RSA2','NS1','NS2','SA1','SA2']
     df = df_subject_query(subjectID)
-    df = df.loc[(df['hit'] == 1) & (df['reject'] == 0) & (df['cond'] != 'X')]
+    
+    if hit == 'both':
+        df = df.loc[(df['reject'] == 0) & (df['cond'] != 'X')]
+    elif hit == 'True':
+        df = df.loc[(df['hit'] == 1) & (df['reject'] == 0) & (df['cond'] != 'X')]
+    else:
+        df = df.loc[(df['hit'] == 0) & (df['reject'] == 0) & (df['cond'] != 'X')]
+    
     trials = {}
     for cond in conds:
         dfc = df.loc[df['cond']==cond]
-        if len(dfc)>=thresh:
+        if len(dfc)>=min_trial:
             indices = list(dfc['index'])
             eeg = epochs_np[indices]
             trials[cond] = eeg
